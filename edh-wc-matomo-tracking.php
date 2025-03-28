@@ -3,7 +3,7 @@
  * Plugin Name: EDH WooCommerce Matomo Tracking
  * Plugin URI: https://encode.host
  * Description: Sends WooCommerce order details to Matomo for enhanced analytics tracking.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: EncodeDotHost
  * Author URI: https://encode.host
  * Text Domain: edh-wc-matomo-tracking
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('EDH_WC_MATOMO_VERSION', '1.0.0');
+define('EDH_WC_MATOMO_VERSION', '1.1.0');
 define('EDH_WC_MATOMO_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('EDH_WC_MATOMO_PLUGIN_URL', plugin_dir_url(__FILE__));
 
