@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace EDH_WC_Matomo_Tracking\Admin;
 
+use EDH_WC_Matomo_Tracking\EDH_WC_Matomo_Logger;
+
 /**
  * Admin class for handling plugin settings
  */
@@ -15,12 +17,21 @@ class EDH_WC_Matomo_Admin {
     private array $settings;
 
     /**
+     * Logger instance
+     *
+     * @var EDH_WC_Matomo_Logger
+     */
+    private EDH_WC_Matomo_Logger $logger;
+
+    /**
      * Constructor
      *
      * @param array $settings Plugin settings.
+     * @param EDH_WC_Matomo_Logger $logger Logger instance.
      */
-    public function __construct(array $settings) {
+    public function __construct(array $settings, EDH_WC_Matomo_Logger $logger) {
         $this->settings = $settings;
+        $this->logger = $logger;
         $this->init();
     }
 
@@ -52,7 +63,12 @@ class EDH_WC_Matomo_Admin {
             wp_die(__('You do not have sufficient permissions to access this page.', 'edh-wc-matomo-tracking'));
         }
 
-        woocommerce_admin_fields($this->get_settings());
+        // Check if we're viewing logs
+        if (isset($_GET['view']) && $_GET['view'] === 'logs') {
+            $this->render_logs_page();
+        } else {
+            woocommerce_admin_fields($this->get_settings());
+        }
     }
 
     /**
@@ -65,7 +81,11 @@ class EDH_WC_Matomo_Admin {
             'section_title' => [
                 'name' => __('Matomo Tracking Settings', 'edh-wc-matomo-tracking'),
                 'type' => 'title',
-                'desc' => __('Configure your Matomo tracking settings below.', 'edh-wc-matomo-tracking'),
+                'desc' => sprintf(
+                    /* translators: %s: URL to logs page */
+                    __('Configure your Matomo tracking settings below. <a href="%s">View transaction logs</a>.', 'edh-wc-matomo-tracking'),
+                    add_query_arg(['view' => 'logs'], admin_url('admin.php?page=wc-settings&tab=edh_wc_matomo'))
+                ),
                 'id' => 'edh_wc_matomo_section_title',
             ],
             'matomo_url' => [
@@ -98,6 +118,14 @@ class EDH_WC_Matomo_Admin {
                 'id' => 'edh_wc_matomo_settings[tracking_enabled]',
                 'default' => $this->settings['tracking_enabled'] ?? true,
             ],
+            'log_retention_days' => [
+                'name' => __('Log Retention (Days)', 'edh-wc-matomo-tracking'),
+                'type' => 'number',
+                'desc' => __('Number of days to keep transaction logs', 'edh-wc-matomo-tracking'),
+                'id' => 'edh_wc_matomo_log_retention_days',
+                'default' => get_option('edh_wc_matomo_log_retention_days', 30),
+                'custom_attributes' => ['min' => '1', 'max' => '365'],
+            ],
             'section_end' => [
                 'type' => 'sectionend',
                 'id' => 'edh_wc_matomo_section_end',
@@ -122,6 +150,15 @@ class EDH_WC_Matomo_Admin {
         }
 
         update_option('edh_wc_matomo_settings', $sanitized);
+        
+        // Update log retention days
+        if (isset($_POST['edh_wc_matomo_log_retention_days'])) {
+            $days = absint($_POST['edh_wc_matomo_log_retention_days']);
+            if ($days >= 1 && $days <= 365) {
+                update_option('edh_wc_matomo_log_retention_days', $days);
+            }
+        }
+        
         WC_Admin_Settings::add_message(__('Settings saved successfully.', 'edh-wc-matomo-tracking'));
     }
 
@@ -149,5 +186,101 @@ class EDH_WC_Matomo_Admin {
         $sanitized['tracking_enabled'] = !empty($input['tracking_enabled']);
 
         return $sanitized;
+    }
+
+    /**
+     * Render logs page
+     */
+    private function render_logs_page(): void {
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die(__('You do not have sufficient permissions to access this page.', 'edh-wc-matomo-tracking'));
+        }
+
+        $page = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
+        $logs = $this->logger->get_recent_logs($page);
+        ?>
+        <div class="wrap">
+            <h1><?php esc_html_e('Matomo Tracking Logs', 'edh-wc-matomo-tracking'); ?></h1>
+            
+            <p class="description">
+                <?php esc_html_e('View transaction logs for Matomo tracking.', 'edh-wc-matomo-tracking'); ?>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=wc-settings&tab=edh_wc_matomo')); ?>">
+                    <?php esc_html_e('← Back to Settings', 'edh-wc-matomo-tracking'); ?>
+                </a>
+            </p>
+            
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e('Date', 'edh-wc-matomo-tracking'); ?></th>
+                        <th><?php esc_html_e('Order ID', 'edh-wc-matomo-tracking'); ?></th>
+                        <th><?php esc_html_e('Event Type', 'edh-wc-matomo-tracking'); ?></th>
+                        <th><?php esc_html_e('Status', 'edh-wc-matomo-tracking'); ?></th>
+                        <th><?php esc_html_e('Error Message', 'edh-wc-matomo-tracking'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($logs['logs'])) : ?>
+                        <tr>
+                            <td colspan="5"><?php esc_html_e('No logs found.', 'edh-wc-matomo-tracking'); ?></td>
+                        </tr>
+                    <?php else : ?>
+                        <?php foreach ($logs['logs'] as $log) : ?>
+                            <tr>
+                                <td><?php echo esc_html(wp_date(get_option('date_format') . ' ' . get_option('time_format'), strtotime($log['created_at']))); ?></td>
+                                <td>
+                                    <a href="<?php echo esc_url(get_edit_post_link($log['order_id'])); ?>">
+                                        #<?php echo esc_html($log['order_id']); ?>
+                                    </a>
+                                </td>
+                                <td><?php echo esc_html($log['event_type']); ?></td>
+                                <td>
+                                    <span class="edh-wc-matomo-status edh-wc-matomo-status-<?php echo esc_attr($log['status']); ?>">
+                                        <?php echo esc_html(ucfirst($log['status'])); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo esc_html($log['error_message']); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+
+            <?php if ($logs['pages'] > 1) : ?>
+                <div class="tablenav">
+                    <div class="tablenav-pages">
+                        <?php
+                        echo paginate_links([
+                            'base' => add_query_arg(['paged' => '%#%', 'view' => 'logs'], admin_url('admin.php?page=wc-settings&tab=edh_wc_matomo')),
+                            'format' => '',
+                            'prev_text' => __('&laquo;'),
+                            'next_text' => __('&raquo;'),
+                            'total' => $logs['pages'],
+                            'current' => $page,
+                        ]);
+                        ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <style>
+            .edh-wc-matomo-status {
+                display: inline-block;
+                padding: 3px 8px;
+                border-radius: 3px;
+                font-size: 12px;
+                line-height: 1;
+            }
+            .edh-wc-matomo-status-success {
+                background-color: #dff0d8;
+                color: #3c763d;
+            }
+            .edh-wc-matomo-status-error {
+                background-color: #f2dede;
+                color: #a94442;
+            }
+        </style>
+        <?php
     }
 } 

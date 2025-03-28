@@ -3,7 +3,7 @@
  * Plugin Name: EDH WooCommerce Matomo Tracking
  * Plugin URI: https://encode.host
  * Description: Sends WooCommerce order details to Matomo for enhanced analytics tracking.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: EncodeDotHost
  * Author URI: https://encode.host
  * Text Domain: edh-wc-matomo-tracking
@@ -11,8 +11,9 @@
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 5.0
+ * Requires WooCommerce: 5.0
  * WC tested up to: 8.0
- *
+ * 
  * @package EDH_WC_Matomo_Tracking
  */
 
@@ -23,9 +24,16 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('EDH_WC_MATOMO_VERSION', '1.1.0');
+define('EDH_WC_MATOMO_VERSION', '1.2.0');
 define('EDH_WC_MATOMO_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('EDH_WC_MATOMO_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+// Declare HPOS compatibility
+add_action('before_woocommerce_init', function() {
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
 
 // Autoloader for plugin classes
 spl_autoload_register(function ($class) {
@@ -59,8 +67,11 @@ function edh_wc_matomo_init() {
         return;
     }
 
-    // Initialize the main plugin class
+    // Load required files
+    require_once EDH_WC_MATOMO_PLUGIN_DIR . 'includes/class-edh-wc-matomo-logger.php';
     require_once EDH_WC_MATOMO_PLUGIN_DIR . 'includes/class-edh-wc-matomo-tracking.php';
+
+    // Initialize the main plugin class
     $plugin = new \EDH_WC_Matomo_Tracking\EDH_WC_Matomo_Tracking();
     $plugin->init();
 }
@@ -75,9 +86,17 @@ register_activation_hook(__FILE__, function() {
         'auth_token' => '',
         'tracking_enabled' => true,
     ]);
+
+    // Set default log retention days
+    add_option('edh_wc_matomo_log_retention_days', 30);
+
+    // Create logs table
+    require_once EDH_WC_MATOMO_PLUGIN_DIR . 'includes/class-edh-wc-matomo-logger.php';
+    $logger = new \EDH_WC_Matomo_Tracking\EDH_WC_Matomo_Logger();
 });
 
 // Deactivation hook
 register_deactivation_hook(__FILE__, function() {
     // Cleanup if necessary
+    wp_clear_scheduled_hook('edh_wc_matomo_cleanup_logs');
 }); 
