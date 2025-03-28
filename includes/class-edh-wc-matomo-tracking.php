@@ -139,7 +139,7 @@ class EDH_WC_Matomo_Tracking {
      * @return void
      */
     private function send_to_matomo(array $data): void {
-        if (empty($this->settings['matomo_url']) || empty($this->settings['site_id'])) {
+        if (empty($this->settings['matomo_url']) || empty($this->settings['site_id']) || empty($this->settings['auth_token'])) {
             return;
         }
 
@@ -156,6 +156,7 @@ class EDH_WC_Matomo_Tracking {
             'urlref' => wp_get_referer(),
             'uid' => get_current_user_id(),
             'rand' => wp_rand(),
+            'token_auth' => $this->settings['auth_token'],
         ];
 
         // Add custom parameters
@@ -163,11 +164,6 @@ class EDH_WC_Matomo_Tracking {
             if (!in_array($key, ['e_a', 'e_c', 'e_n', 'e_v'], true)) {
                 $params['c_' . $key] = is_array($value) ? wp_json_encode($value) : $value;
             }
-        }
-
-        // Add authentication token if available
-        if (!empty($this->settings['auth_token'])) {
-            $params['token_auth'] = $this->settings['auth_token'];
         }
 
         wp_remote_post($url, [

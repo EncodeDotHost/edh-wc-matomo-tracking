@@ -133,10 +133,10 @@ class EDH_WC_Matomo_Admin {
                name="edh_wc_matomo_settings[matomo_url]" 
                value="<?php echo esc_attr($value); ?>" 
                class="regular-text"
-               placeholder="https://your-matomo-instance.com"
+               placeholder="https://analytics.example.com"
         />
         <p class="description">
-            <?php esc_html_e('Enter the URL of your Matomo instance (e.g., https://your-matomo-instance.com)', 'edh-wc-matomo-tracking'); ?>
+            <?php esc_html_e('Enter the URL of your Matomo instance (e.g., https://analytics.example.com)', 'edh-wc-matomo-tracking'); ?>
         </p>
         <?php
     }
@@ -168,9 +168,10 @@ class EDH_WC_Matomo_Admin {
                name="edh_wc_matomo_settings[auth_token]" 
                value="<?php echo esc_attr($value); ?>" 
                class="regular-text"
+               required
         />
         <p class="description">
-            <?php esc_html_e('Enter your Matomo authentication token (optional)', 'edh-wc-matomo-tracking'); ?>
+            <?php esc_html_e('Enter your Matomo authentication token. This is required for secure server-side tracking.', 'edh-wc-matomo-tracking'); ?>
         </p>
         <?php
     }
@@ -211,6 +212,16 @@ class EDH_WC_Matomo_Admin {
 
         if (isset($input['auth_token'])) {
             $sanitized['auth_token'] = sanitize_text_field($input['auth_token']);
+        }
+
+        // Validate required fields
+        if (empty($sanitized['auth_token'])) {
+            add_settings_error(
+                'edh_wc_matomo_settings',
+                'auth_token_required',
+                __('Authentication token is required for secure tracking.', 'edh-wc-matomo-tracking')
+            );
+            return get_option('edh_wc_matomo_settings');
         }
 
         $sanitized['tracking_enabled'] = !empty($input['tracking_enabled']);
