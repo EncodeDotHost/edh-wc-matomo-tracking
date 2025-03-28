@@ -28,169 +28,101 @@ class EDH_WC_Matomo_Admin {
      * Initialize admin functionality
      */
     private function init(): void {
-        add_action('admin_menu', [$this, 'add_admin_menu']);
-        add_action('admin_init', [$this, 'register_settings']);
+        add_filter('woocommerce_settings_tabs_array', [$this, 'add_settings_tab'], 50);
+        add_action('woocommerce_settings_tabs_edh_wc_matomo', [$this, 'render_settings_tab']);
+        add_action('woocommerce_update_options_edh_wc_matomo', [$this, 'update_settings']);
     }
 
     /**
-     * Add admin menu item
+     * Add settings tab to WooCommerce settings
+     *
+     * @param array $settings_tabs Array of WooCommerce settings tabs.
+     * @return array
      */
-    public function add_admin_menu(): void {
-        add_submenu_page(
-            'woocommerce',
-            __('Matomo Tracking Settings', 'edh-wc-matomo-tracking'),
-            __('Matomo Tracking', 'edh-wc-matomo-tracking'),
-            'manage_woocommerce',
-            'edh-wc-matomo-tracking',
-            [$this, 'render_settings_page']
-        );
+    public function add_settings_tab(array $settings_tabs): array {
+        $settings_tabs['edh_wc_matomo'] = __('Matomo Tracking', 'edh-wc-matomo-tracking');
+        return $settings_tabs;
     }
 
     /**
-     * Register plugin settings
+     * Render settings tab content
      */
-    public function register_settings(): void {
-        register_setting('edh_wc_matomo_settings', 'edh_wc_matomo_settings', [
-            'type' => 'array',
-            'sanitize_callback' => [$this, 'sanitize_settings'],
-        ]);
-
-        add_settings_section(
-            'edh_wc_matomo_main_section',
-            __('Main Settings', 'edh-wc-matomo-tracking'),
-            [$this, 'render_section_description'],
-            'edh-wc-matomo-tracking'
-        );
-
-        add_settings_field(
-            'matomo_url',
-            __('Matomo URL', 'edh-wc-matomo-tracking'),
-            [$this, 'render_matomo_url_field'],
-            'edh-wc-matomo-tracking',
-            'edh_wc_matomo_main_section'
-        );
-
-        add_settings_field(
-            'site_id',
-            __('Site ID', 'edh-wc-matomo-tracking'),
-            [$this, 'render_site_id_field'],
-            'edh-wc-matomo-tracking',
-            'edh_wc_matomo_main_section'
-        );
-
-        add_settings_field(
-            'auth_token',
-            __('Auth Token', 'edh-wc-matomo-tracking'),
-            [$this, 'render_auth_token_field'],
-            'edh-wc-matomo-tracking',
-            'edh_wc_matomo_main_section'
-        );
-
-        add_settings_field(
-            'tracking_enabled',
-            __('Enable Tracking', 'edh-wc-matomo-tracking'),
-            [$this, 'render_tracking_enabled_field'],
-            'edh-wc-matomo-tracking',
-            'edh_wc_matomo_main_section'
-        );
-    }
-
-    /**
-     * Render settings page
-     */
-    public function render_settings_page(): void {
+    public function render_settings_tab(): void {
         if (!current_user_can('manage_woocommerce')) {
             wp_die(__('You do not have sufficient permissions to access this page.', 'edh-wc-matomo-tracking'));
         }
-        ?>
-        <div class="wrap">
-            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-            <form method="post" action="options.php">
-                <?php
-                settings_fields('edh_wc_matomo_settings');
-                do_settings_sections('edh-wc-matomo-tracking');
-                submit_button();
-                ?>
-            </form>
-        </div>
-        <?php
+
+        woocommerce_admin_fields($this->get_settings());
     }
 
     /**
-     * Render section description
+     * Get settings fields
+     *
+     * @return array
      */
-    public function render_section_description(): void {
-        echo '<p>' . esc_html__('Configure your Matomo tracking settings below.', 'edh-wc-matomo-tracking') . '</p>';
+    private function get_settings(): array {
+        return [
+            'section_title' => [
+                'name' => __('Matomo Tracking Settings', 'edh-wc-matomo-tracking'),
+                'type' => 'title',
+                'desc' => __('Configure your Matomo tracking settings below.', 'edh-wc-matomo-tracking'),
+                'id' => 'edh_wc_matomo_section_title',
+            ],
+            'matomo_url' => [
+                'name' => __('Matomo URL', 'edh-wc-matomo-tracking'),
+                'type' => 'text',
+                'desc' => __('Enter the URL of your Matomo instance (e.g., https://analytics.example.com)', 'edh-wc-matomo-tracking'),
+                'id' => 'edh_wc_matomo_settings[matomo_url]',
+                'default' => $this->settings['matomo_url'] ?? '',
+                'placeholder' => 'https://analytics.example.com',
+            ],
+            'site_id' => [
+                'name' => __('Site ID', 'edh-wc-matomo-tracking'),
+                'type' => 'number',
+                'desc' => __('Enter your Matomo site ID', 'edh-wc-matomo-tracking'),
+                'id' => 'edh_wc_matomo_settings[site_id]',
+                'default' => $this->settings['site_id'] ?? '',
+            ],
+            'auth_token' => [
+                'name' => __('Auth Token', 'edh-wc-matomo-tracking'),
+                'type' => 'password',
+                'desc' => __('Enter your Matomo authentication token. This is required for secure server-side tracking.', 'edh-wc-matomo-tracking'),
+                'id' => 'edh_wc_matomo_settings[auth_token]',
+                'default' => $this->settings['auth_token'] ?? '',
+                'custom_attributes' => ['required' => 'required'],
+            ],
+            'tracking_enabled' => [
+                'name' => __('Enable Tracking', 'edh-wc-matomo-tracking'),
+                'type' => 'checkbox',
+                'desc' => __('Enable WooCommerce order tracking in Matomo', 'edh-wc-matomo-tracking'),
+                'id' => 'edh_wc_matomo_settings[tracking_enabled]',
+                'default' => $this->settings['tracking_enabled'] ?? true,
+            ],
+            'section_end' => [
+                'type' => 'sectionend',
+                'id' => 'edh_wc_matomo_section_end',
+            ],
+        ];
     }
 
     /**
-     * Render Matomo URL field
+     * Update settings
      */
-    public function render_matomo_url_field(): void {
-        $value = $this->settings['matomo_url'] ?? '';
-        ?>
-        <input type="url" 
-               name="edh_wc_matomo_settings[matomo_url]" 
-               value="<?php echo esc_attr($value); ?>" 
-               class="regular-text"
-               placeholder="https://analytics.example.com"
-        />
-        <p class="description">
-            <?php esc_html_e('Enter the URL of your Matomo instance (e.g., https://analytics.example.com)', 'edh-wc-matomo-tracking'); ?>
-        </p>
-        <?php
-    }
+    public function update_settings(): void {
+        if (!isset($_POST['edh_wc_matomo_settings'])) {
+            return;
+        }
 
-    /**
-     * Render Site ID field
-     */
-    public function render_site_id_field(): void {
-        $value = $this->settings['site_id'] ?? '';
-        ?>
-        <input type="number" 
-               name="edh_wc_matomo_settings[site_id]" 
-               value="<?php echo esc_attr($value); ?>" 
-               class="small-text"
-        />
-        <p class="description">
-            <?php esc_html_e('Enter your Matomo site ID', 'edh-wc-matomo-tracking'); ?>
-        </p>
-        <?php
-    }
+        $input = $_POST['edh_wc_matomo_settings'];
+        $sanitized = $this->sanitize_settings($input);
 
-    /**
-     * Render Auth Token field
-     */
-    public function render_auth_token_field(): void {
-        $value = $this->settings['auth_token'] ?? '';
-        ?>
-        <input type="password" 
-               name="edh_wc_matomo_settings[auth_token]" 
-               value="<?php echo esc_attr($value); ?>" 
-               class="regular-text"
-               required
-        />
-        <p class="description">
-            <?php esc_html_e('Enter your Matomo authentication token. This is required for secure server-side tracking.', 'edh-wc-matomo-tracking'); ?>
-        </p>
-        <?php
-    }
+        if (empty($sanitized['auth_token'])) {
+            WC_Admin_Settings::add_error(__('Authentication token is required for secure tracking.', 'edh-wc-matomo-tracking'));
+            return;
+        }
 
-    /**
-     * Render Tracking Enabled field
-     */
-    public function render_tracking_enabled_field(): void {
-        $value = $this->settings['tracking_enabled'] ?? true;
-        ?>
-        <label>
-            <input type="checkbox" 
-                   name="edh_wc_matomo_settings[tracking_enabled]" 
-                   value="1" 
-                   <?php checked($value, true); ?>
-            />
-            <?php esc_html_e('Enable WooCommerce order tracking in Matomo', 'edh-wc-matomo-tracking'); ?>
-        </label>
-        <?php
+        update_option('edh_wc_matomo_settings', $sanitized);
+        WC_Admin_Settings::add_message(__('Settings saved successfully.', 'edh-wc-matomo-tracking'));
     }
 
     /**
@@ -199,7 +131,7 @@ class EDH_WC_Matomo_Admin {
      * @param array $input Input array.
      * @return array
      */
-    public function sanitize_settings(array $input): array {
+    private function sanitize_settings(array $input): array {
         $sanitized = [];
 
         if (isset($input['matomo_url'])) {
@@ -212,16 +144,6 @@ class EDH_WC_Matomo_Admin {
 
         if (isset($input['auth_token'])) {
             $sanitized['auth_token'] = sanitize_text_field($input['auth_token']);
-        }
-
-        // Validate required fields
-        if (empty($sanitized['auth_token'])) {
-            add_settings_error(
-                'edh_wc_matomo_settings',
-                'auth_token_required',
-                __('Authentication token is required for secure tracking.', 'edh-wc-matomo-tracking')
-            );
-            return get_option('edh_wc_matomo_settings');
         }
 
         $sanitized['tracking_enabled'] = !empty($input['tracking_enabled']);

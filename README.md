@@ -27,12 +27,13 @@ This plugin integrates WooCommerce with Matomo analytics by tracking:
 
 ## Configuration
 
-1. Go to WooCommerce > Matomo Tracking in your WordPress admin
-2. Enter your Matomo instance URL (e.g., https://analytics.example.com)
-3. Enter your Matomo site ID
-4. Enter your Matomo authentication token (required for secure server-side tracking)
-5. Enable/disable tracking as needed
-6. Click "Save Changes"
+1. Go to WooCommerce > Settings in your WordPress admin
+2. Click on the "Matomo Tracking" tab
+3. Enter your Matomo instance URL (e.g., https://analytics.example.com)
+4. Enter your Matomo site ID
+5. Enter your Matomo authentication token (required for secure server-side tracking)
+6. Enable/disable tracking as needed
+7. Click "Save changes"
 
 ## Features
 
